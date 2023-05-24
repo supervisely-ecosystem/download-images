@@ -1,0 +1,21 @@
+{
+  "name": "Download images",
+  "type": "app",
+  "version": "2.0.0",
+  "release": { "version": "v0.0.3", "name": "init" },
+  "categories": ["export", "images"],
+  "description": "Download images from project or dataset.",
+  "docker_image": "supervisely/base-py-sdk:6.72.15",
+  "entrypoint": "python -m uvicorn src.main:app --host 0.0.0.0 --port 8000",
+  "port": 8000,
+  "task_location": "workspace_tasks",
+  "icon": "placeholder",
+  "icon_cover": true,
+  "headless": false,
+  "icon_background": "#FFFFFF",
+  "context_menu": {
+    "target": ["images_project", "images_dataset"],
+    "context_root": "Download as"
+  },
+  "poster": "placeholder"
+}
