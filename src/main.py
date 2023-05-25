@@ -53,7 +53,7 @@ class ExportImages(sly.app.Export):
         return self.archive_path
 
     def archive_images(self):
-        input_path = os.path.join(TMP_DIR, self.project_name)
+        input_path = os.path.join(TMP_DIR)
         self.archive_path = os.path.join(RES_DIR, self.archive_name)
 
         sly.fs.archive_directory(input_path, self.archive_path)
