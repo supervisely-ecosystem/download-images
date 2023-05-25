@@ -1,110 +1,100 @@
 import os
 
+from collections import namedtuple
+
 import supervisely as sly
+from dotenv import load_dotenv
 
-import src.globals as g
+if sly.is_development():
+    load_dotenv("local.env")
+    load_dotenv(os.path.expanduser("~/supervisely.env"))
 
+api: sly.Api = sly.Api.from_env()
 
-app = sly.Application()
+DatasetData = namedtuple("DatasetData", ["name", "id", "image_infos"])
 
-
-def read_dataset(dataset_info):
-    image_infos = g.api.image.get_list(dataset_info.id, force_metadata_for_links=False)
-
-    g.STATE.image_data.append(
-        g.DatasetData(dataset_info.name, dataset_info.id, image_infos)
-    )
-    g.STATE.images_number += len(image_infos)
-
-
-def update_image_data():
-    if g.STATE.selected_dataset:
-        sly.logger.info(f"App launched from dataset: {g.STATE.selected_dataset}")
-
-        dataset_info = g.api.dataset.get_info_by_id(g.STATE.selected_dataset)
-        project_id = dataset_info.project_id
-
-        read_dataset(dataset_info)
-
-    else:
-        sly.logger.info(f"App launched from project: {g.STATE.selected_project}")
-        project_id = g.STATE.selected_project
-
-        datasets = g.api.dataset.get_list(g.STATE.selected_project)
-        for dataset in datasets:
-            dataset_info = g.api.dataset.get_info_by_id(dataset.id)
-            read_dataset(dataset_info)
-
-    g.STATE.project_name = g.api.project.get_info_by_id(project_id).name
-    g.STATE.archive_name = g.STATE.project_name + ".tar"
+SLY_APP_DATA_DIR = sly.app.get_data_dir()
+TMP_DIR = os.path.join(SLY_APP_DATA_DIR, "tmp")
+RES_DIR = os.path.join(SLY_APP_DATA_DIR, "res")
+os.makedirs(TMP_DIR, exist_ok=True)
+os.makedirs(RES_DIR, exist_ok=True)
 
 
-def download_images():
-    progress = sly.Progress(
-        "Downloading images", g.STATE.images_number, need_info_log=True
-    )
+class ExportImages(sly.app.Export):
+    def process(self, context: sly.app.Export.Context):
+        self.selected_project = sly.io.env.project_id(raise_not_found=False)
+        self.selected_dataset = sly.io.env.dataset_id(raise_not_found=False)
+        self.image_data = []
+        self.images_number = 0
 
-    for dataset_data in g.STATE.image_data:
-        for batched_image_infos in sly.batched(
-            dataset_data.image_infos, batch_size=g.BATCH_SIZE
-        ):
-            batched_image_ids = [image_info.id for image_info in batched_image_infos]
+        if self.selected_dataset:
+            sly.logger.info(f"App launched from dataset: {self.selected_dataset}")
 
-            dataset_path = os.path.join(
-                g.TMP_DIR, g.STATE.project_name, dataset_data.name
-            )
-            os.makedirs(dataset_path, exist_ok=True)
+            dataset_info = api.dataset.get_info_by_id(self.selected_dataset)
+            project_id = dataset_info.project_id
 
-            paths = [
-                os.path.join(dataset_path, image_info.name)
-                for image_info in batched_image_infos
-            ]
+            self.read_dataset(dataset_info)
 
-            g.api.image.download_paths(dataset_data.id, batched_image_ids, paths)
+        else:
+            sly.logger.info(f"App launched from project: {self.selected_project}")
+            project_id = self.selected_project
 
-            progress.iters_done_report(len(batched_image_ids))
+            datasets = api.dataset.get_list(self.selected_project)
+            for dataset in datasets:
+                dataset_info = api.dataset.get_info_by_id(dataset.id)
+                self.read_dataset(dataset_info)
 
+        self.project_name = api.project.get_info_by_id(project_id).name
+        self.archive_name = self.project_name + ".tar"
 
-def archive_images():
-    input_path = os.path.join(g.TMP_DIR, g.STATE.project_name)
-    g.STATE.archive_path = os.path.join(g.RES_DIR, g.STATE.archive_name)
+        self.download_images()
+        self.archive_images()
 
-    sly.fs.archive_directory(input_path, g.STATE.archive_path)
+        return self.archive_path
 
+    def archive_images(self):
+        input_path = os.path.join(TMP_DIR, self.project_name)
+        self.archive_path = os.path.join(RES_DIR, self.archive_name)
 
-def print_progress(monitor, upload_progress):
-    if len(upload_progress) == 0:
-        upload_progress.append(
-            sly.Progress(
-                message="Uploading archive",
-                total_cnt=monitor.len,
-                is_size=True,
-            )
+        sly.fs.archive_directory(input_path, self.archive_path)
+
+    def download_images(self):
+        progress = sly.Progress(
+            "Downloading images", self.images_number, need_info_log=True
         )
-    upload_progress[0].set_current_value(monitor.bytes_read)
+
+        for dataset_data in self.image_data:
+            for batched_image_infos in sly.batched(
+                dataset_data.image_infos,
+            ):
+                batched_image_ids = [
+                    image_info.id for image_info in batched_image_infos
+                ]
+
+                dataset_path = os.path.join(
+                    TMP_DIR, self.project_name, dataset_data.name
+                )
+                os.makedirs(dataset_path, exist_ok=True)
+
+                paths = [
+                    os.path.join(dataset_path, image_info.name)
+                    for image_info in batched_image_infos
+                ]
+
+                api.image.download_paths(dataset_data.id, batched_image_ids, paths)
+
+                progress.iters_done_report(len(batched_image_ids))
+
+    def read_dataset(self, dataset_info):
+        image_infos = api.image.get_list(
+            dataset_info.id, force_metadata_for_links=False
+        )
+
+        self.image_data.append(
+            DatasetData(dataset_info.name, dataset_info.id, image_infos)
+        )
+        self.images_number += len(image_infos)
 
 
-def upload_archive():
-    dst_path = "/download-images/" + g.STATE.archive_name
-
-    upload_progress = []
-
-    g.api.file.upload(
-        g.STATE.selected_team,
-        g.STATE.archive_path,
-        dst_path,
-        lambda m: print_progress(m, upload_progress),
-    )
-
-
-def clean_dirs():
-    sly.fs.clean_dir(g.TMP_DIR, ignore_errors=True)
-    sly.fs.clean_dir(g.RES_DIR, ignore_errors=True)
-
-
-clean_dirs()
-update_image_data()
-download_images()
-archive_images()
-upload_archive()
-clean_dirs()
+app = ExportImages()
+app.run()
