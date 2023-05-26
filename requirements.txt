@@ -1,4 +1,4 @@
-git+https://github.com/supervisely/supervisely.git@export-template-archive-check
+supervisely==6.72.18
 
 # code formatter
 black
