@@ -6,7 +6,7 @@
         "images"
     ],
     "description": "Download images from project or dataset.",
-    "docker_image": "supervisely/import-export:0.0.2",
+    "docker_image": "supervisely/import-export:0.0.5",
     "instance_version": "6.5.1",
     "main_script": "src/main.py",
     "task_location": "workspace_tasks",
