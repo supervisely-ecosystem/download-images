@@ -4,6 +4,8 @@ from collections import namedtuple
 
 import supervisely as sly
 from dotenv import load_dotenv
+from supervisely import handle_exceptions
+
 
 if sly.is_development():
     load_dotenv("local.env")
@@ -96,5 +98,11 @@ class ExportImages(sly.app.Export):
         self.images_number += len(image_infos)
 
 
-app = ExportImages()
-app.run()
+@handle_exceptions
+def main():
+    app = ExportImages()
+    app.run()
+
+
+if __name__ == "__main__":
+    sly.main_wrapper("main", main)
