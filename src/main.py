@@ -4,7 +4,7 @@ from collections import namedtuple
 
 import supervisely as sly
 from dotenv import load_dotenv
-from supervisely import handle_exceptions
+from supervisely.io.exception_handlers import handle_exception
 
 
 if sly.is_development():
@@ -97,12 +97,20 @@ class ExportImages(sly.app.Export):
         )
         self.images_number += len(image_infos)
 
-
-@handle_exceptions
 def main():
-    app = ExportImages()
-    app.run()
-
+    try:
+        app = ExportImages()
+        app.run()
+    except Exception as e:
+        exception_handler = handle_exception(e)
+        if exception_handler:
+            raise Exception(exception_handler.get_message_for_modal_window()) from e
+        else:
+            raise e
+    finally:
+        if not sly.is_development():
+            sly.logger.info(f"Remove sly app directory: {SLY_APP_DATA_DIR}")
+            sly.fs.remove_dir(SLY_APP_DATA_DIR)
 
 if __name__ == "__main__":
     sly.main_wrapper("main", main)
