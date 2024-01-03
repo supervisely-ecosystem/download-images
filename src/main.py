@@ -1,11 +1,8 @@
 import os
-
 from collections import namedtuple
 
 import supervisely as sly
 from dotenv import load_dotenv
-from supervisely.io.exception_handlers import handle_exception
-
 
 if sly.is_development():
     load_dotenv("local.env")
@@ -61,21 +58,15 @@ class ExportImages(sly.app.Export):
         sly.fs.archive_directory(input_path, self.archive_path)
 
     def download_images(self):
-        progress = sly.Progress(
-            "Downloading images", self.images_number, need_info_log=True
-        )
+        progress = sly.Progress("Downloading images", self.images_number, need_info_log=True)
 
         for dataset_data in self.image_data:
             for batched_image_infos in sly.batched(
                 dataset_data.image_infos,
             ):
-                batched_image_ids = [
-                    image_info.id for image_info in batched_image_infos
-                ]
+                batched_image_ids = [image_info.id for image_info in batched_image_infos]
 
-                dataset_path = os.path.join(
-                    TMP_DIR, self.project_name, dataset_data.name
-                )
+                dataset_path = os.path.join(TMP_DIR, self.project_name, dataset_data.name)
                 os.makedirs(dataset_path, exist_ok=True)
 
                 paths = [
@@ -88,29 +79,22 @@ class ExportImages(sly.app.Export):
                 progress.iters_done_report(len(batched_image_ids))
 
     def read_dataset(self, dataset_info):
-        image_infos = api.image.get_list(
-            dataset_info.id, force_metadata_for_links=False
-        )
+        image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
 
-        self.image_data.append(
-            DatasetData(dataset_info.name, dataset_info.id, image_infos)
-        )
+        self.image_data.append(DatasetData(dataset_info.name, dataset_info.id, image_infos))
         self.images_number += len(image_infos)
 
+
+@sly.handle_exceptions(has_ui=False)
 def main():
     try:
         app = ExportImages()
         app.run()
-    except Exception as e:
-        exception_handler = handle_exception(e)
-        if exception_handler:
-            raise Exception(exception_handler.get_message_for_modal_window()) from e
-        else:
-            raise e
     finally:
         if not sly.is_development():
             sly.logger.info(f"Remove sly app directory: {SLY_APP_DATA_DIR}")
             sly.fs.remove_dir(SLY_APP_DATA_DIR)
+
 
 if __name__ == "__main__":
     sly.main_wrapper("main", main)
