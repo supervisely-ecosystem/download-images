@@ -4,6 +4,8 @@ from collections import namedtuple
 import supervisely as sly
 from dotenv import load_dotenv
 
+import workflow as w
+
 if sly.is_development():
     load_dotenv("local.env")
     load_dotenv(os.path.expanduser("~/supervisely.env"))
@@ -33,7 +35,7 @@ class ExportImages(sly.app.Export):
             project_id = dataset_info.project_id
 
             self.read_dataset(dataset_info)
-
+            w.workflow_input(api, self.selected_dataset, type="dataset")
         else:
             sly.logger.info(f"App launched from project: {self.selected_project}")
             project_id = self.selected_project
@@ -43,6 +45,7 @@ class ExportImages(sly.app.Export):
                 dataset_info = api.dataset.get_info_by_id(dataset.id)
                 self.read_dataset(dataset_info)
 
+            w.workflow_input(api, self.selected_project, type="project")
         self.project_name = api.project.get_info_by_id(project_id).name
         self.archive_name = self.project_name + ".tar"
 
@@ -90,6 +93,7 @@ def main():
     try:
         app = ExportImages()
         app.run()
+        w.workflow_output(api, app.output_file)
     finally:
         if not sly.is_development():
             sly.logger.info(f"Remove sly app directory: {SLY_APP_DATA_DIR}")
