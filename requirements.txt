@@ -1,0 +1,6 @@
+# supervisely==6.73.157
+git+https://github.com/supervisely/supervisely.git@dnd_mode_workflow
+
+
+# code formatter
+black
