@@ -1,10 +1,13 @@
 {
   "name": "Download images",
   "type": "app",
-  "categories": ["export", "images"],
+  "categories": [
+    "export",
+    "images"
+  ],
   "description": "Download images from project or dataset.",
-  "docker_image": "supervisely/import-export:6.73.157",
-  "min_instance_version": "6.10.0",
+  "docker_image": "supervisely/import-export:6.73.160",
+  "min_instance_version": "6.11.8",
   "main_script": "src/main.py",
   "task_location": "workspace_tasks",
   "icon": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/7fc6f17a-4afb-4521-9c13-59e95aab402c",
@@ -12,7 +15,10 @@
   "headless": true,
   "icon_background": "#FFFFFF",
   "context_menu": {
-    "target": ["images_project", "images_dataset"],
+    "target": [
+      "images_project",
+      "images_dataset"
+    ],
     "context_root": "Download as"
   },
   "poster": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/269e6cd5-2cdf-4d2e-972f-abebcbe63b5d"
