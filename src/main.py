@@ -72,8 +72,9 @@ class ExportImages(sly.app.Export):
                 os.path.join(dataset_path, image_info.name)
                 for image_info in dataset_data.image_infos
             ]
+            semaphore = asyncio.Semaphore(100)
             coro = api.image.download_paths_async(
-                image_ids, paths, progress_cb=progress.iters_done_report
+                image_ids, paths, semaphore, progress_cb=progress.iters_done_report
             )
             loop = sly.utils.get_or_create_event_loop()
             if loop.is_running():
@@ -81,7 +82,6 @@ class ExportImages(sly.app.Export):
                 future.result()
             else:
                 loop.run_until_complete(coro)
-            
 
     def read_dataset(self, dataset_info):
         image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
