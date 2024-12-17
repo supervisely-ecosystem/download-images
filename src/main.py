@@ -21,6 +21,11 @@ RES_DIR = os.path.join(SLY_APP_DATA_DIR, "res")
 os.makedirs(TMP_DIR, exist_ok=True)
 os.makedirs(RES_DIR, exist_ok=True)
 
+if api.server_address == "https://app.supervisely.com":
+    semaphore = api.get_default_semaphore()
+    if semaphore._value == 10:
+        api.set_semaphore_size(7)
+
 
 class ExportImages(sly.app.Export):
     def process(self, context: sly.app.Export.Context):
