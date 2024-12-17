@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections import namedtuple
 
@@ -19,6 +20,11 @@ TMP_DIR = os.path.join(SLY_APP_DATA_DIR, "tmp")
 RES_DIR = os.path.join(SLY_APP_DATA_DIR, "res")
 os.makedirs(TMP_DIR, exist_ok=True)
 os.makedirs(RES_DIR, exist_ok=True)
+
+if api.server_address == "https://app.supervisely.com":
+    semaphore = api.get_default_semaphore()
+    if semaphore._value == 10:
+        api.set_semaphore_size(7)
 
 
 class ExportImages(sly.app.Export):
@@ -64,22 +70,22 @@ class ExportImages(sly.app.Export):
         progress = sly.Progress("Downloading images", self.images_number, need_info_log=True)
 
         for dataset_data in self.image_data:
-            for batched_image_infos in sly.batched(
-                dataset_data.image_infos,
-            ):
-                batched_image_ids = [image_info.id for image_info in batched_image_infos]
-
-                dataset_path = os.path.join(TMP_DIR, self.project_name, dataset_data.name)
-                os.makedirs(dataset_path, exist_ok=True)
-
-                paths = [
-                    os.path.join(dataset_path, image_info.name)
-                    for image_info in batched_image_infos
-                ]
-
-                api.image.download_paths(dataset_data.id, batched_image_ids, paths)
-
-                progress.iters_done_report(len(batched_image_ids))
+            dataset_path = os.path.join(TMP_DIR, self.project_name, dataset_data.name)
+            os.makedirs(dataset_path, exist_ok=True)
+            image_ids = [image_info.id for image_info in dataset_data.image_infos]
+            paths = [
+                os.path.join(dataset_path, image_info.name)
+                for image_info in dataset_data.image_infos
+            ]
+            coro = api.image.download_paths_async(
+                image_ids, paths, progress_cb=progress.iters_done_report
+            )
+            loop = sly.utils.get_or_create_event_loop()
+            if loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
+                future.result()
+            else:
+                loop.run_until_complete(coro)
 
     def read_dataset(self, dataset_info):
         image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
