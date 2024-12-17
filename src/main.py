@@ -72,13 +72,8 @@ class ExportImages(sly.app.Export):
                 os.path.join(dataset_path, image_info.name)
                 for image_info in dataset_data.image_infos
             ]
-            if api.server_address.startswith("https://"):
-                semaphore = asyncio.Semaphore(100)
-            else:
-                semaphore = None
-            api._get_default_semaphore()
             coro = api.image.download_paths_async(
-                image_ids, paths, semaphore, progress_cb=progress.iters_done_report
+                image_ids, paths, progress_cb=progress.iters_done_report
             )
             loop = sly.utils.get_or_create_event_loop()
             if loop.is_running():
