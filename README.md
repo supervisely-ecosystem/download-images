@@ -22,7 +22,7 @@ Download images from the Supervisely project or dataset in a single \*.tar archi
 
 # How To Use
 
-**Step 1**: Add app to your team from [Ecosystem](https://ecosystem.supervise.ly/apps/download-images) if it is not there<br><br>
+**Step 1**: Add app to your team from [Ecosystem](https://ecosystem.supervisely.com/apps/download-images) if it is not there<br><br>
 
 **Step 2**: Select a project or a dataset you want to download images from and open the context menu -> `Run App` -> `Download via app` -> `Download images`.<br>
 
