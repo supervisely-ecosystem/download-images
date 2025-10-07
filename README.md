@@ -8,7 +8,7 @@
   <a href="#How-To-Use">How To Use</a>
 </p>
 
-[![](https://img.shields.io/badge/supervisely-ecosystem-brightgreen)](https://ecosystem.supervise.ly/apps/supervisely-ecosystem/download-images)
+[![](https://img.shields.io/badge/supervisely-ecosystem-brightgreen)](../../../../supervisely-ecosystem/download-images)
 [![](https://img.shields.io/badge/slack-chat-green.svg?logo=slack)](https://supervise.ly/slack)
 ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/supervisely-ecosystem/download-images)
 [![views](https://app.supervise.ly/img/badges/views/supervisely-ecosystem/download-images.png)](https://supervise.ly)
@@ -22,7 +22,7 @@ Download images from the Supervisely project or dataset in a single \*.tar archi
 
 # How To Use
 
-**Step 1**: Add app to your team from [Ecosystem](https://ecosystem.supervisely.com/apps/download-images) if it is not there<br><br>
+**Step 1**: Add app to your team from [Ecosystem](../../../../supervisely-ecosystem/download-images) if it is not there<br><br>
 
 **Step 2**: Select a project or a dataset you want to download images from and open the context menu -> `Run App` -> `Download via app` -> `Download images`.<br>
 
