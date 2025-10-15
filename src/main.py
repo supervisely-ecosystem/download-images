@@ -46,7 +46,7 @@ class ExportImages(sly.app.Export):
             sly.logger.info(f"App launched from project: {self.selected_project}")
             project_id = self.selected_project
 
-            datasets = api.dataset.get_list(self.selected_project)
+            datasets = api.dataset.get_list(self.selected_project, recursive=True)
             for dataset in datasets:
                 dataset_info = api.dataset.get_info_by_id(dataset.id)
                 self.read_dataset(dataset_info)

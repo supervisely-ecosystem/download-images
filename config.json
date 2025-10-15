@@ -1,19 +1,19 @@
 {
-	"name": "Download images",
-	"type": "app",
-	"categories": ["export", "images"],
-	"description": "Download images from project or dataset.",
-	"docker_image": "supervisely/import-export:6.73.256",
-	"min_instance_version": "6.12.12",
-	"main_script": "src/main.py",
-	"task_location": "workspace_tasks",
-	"icon": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/7fc6f17a-4afb-4521-9c13-59e95aab402c",
-	"icon_cover": true,
-	"headless": true,
-	"icon_background": "#FFFFFF",
-	"context_menu": {
-		"target": ["images_project", "images_dataset"],
-		"context_root": "Download as"
-	},
-	"poster": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/269e6cd5-2cdf-4d2e-972f-abebcbe63b5d"
+  "name": "Download images",
+  "type": "app",
+  "categories": ["export", "images"],
+  "description": "Download images from project or dataset.",
+  "docker_image": "supervisely/import-export:6.73.454",
+  "min_instance_version": "6.15.2",
+  "main_script": "src/main.py",
+  "task_location": "workspace_tasks",
+  "icon": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/7fc6f17a-4afb-4521-9c13-59e95aab402c",
+  "icon_cover": true,
+  "headless": true,
+  "icon_background": "#FFFFFF",
+  "context_menu": {
+    "target": ["images_project", "images_dataset"],
+    "context_root": "Download as"
+  },
+  "poster": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/269e6cd5-2cdf-4d2e-972f-abebcbe63b5d"
 }
