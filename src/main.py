@@ -31,7 +31,7 @@ class ExportImages(sly.app.Export):
     def process(self, context: sly.app.Export.Context):
         self.selected_project = sly.io.env.project_id(raise_not_found=False)
         self.selected_dataset = sly.io.env.dataset_id(raise_not_found=False)
-        self.image_data = []
+        self.image_data = {}
         self.images_number = 0
 
         if self.selected_dataset:
