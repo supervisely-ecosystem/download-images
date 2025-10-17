@@ -48,6 +48,7 @@ class ExportImages(sly.app.Export):
 
             for path, dataset in api.dataset.tree(project_id):
                 dataset_info = api.dataset.get_info_by_id(dataset.id)
+                path = "/".join(path)
                 self.image_data[path] = self.read_dataset(dataset_info)
 
             w.workflow_input(api, self.selected_project, type="project")
