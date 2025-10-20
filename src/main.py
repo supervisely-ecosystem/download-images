@@ -31,7 +31,7 @@ class ExportImages(sly.app.Export):
     def process(self, context: sly.app.Export.Context):
         self.selected_project = sly.io.env.project_id(raise_not_found=False)
         self.selected_dataset = sly.io.env.dataset_id(raise_not_found=False)
-        self.image_data = []
+        self.image_data = {}
         self.images_number = 0
 
         if self.selected_dataset:
@@ -46,10 +46,10 @@ class ExportImages(sly.app.Export):
             sly.logger.info(f"App launched from project: {self.selected_project}")
             project_id = self.selected_project
 
-            datasets = api.dataset.get_list(self.selected_project)
-            for dataset in datasets:
+            for path, dataset in api.dataset.tree(project_id):
                 dataset_info = api.dataset.get_info_by_id(dataset.id)
-                self.read_dataset(dataset_info)
+                path = "/".join(path)
+                self.image_data[path] = self.read_dataset(dataset_info)
 
             w.workflow_input(api, self.selected_project, type="project")
         self.project_name = api.project.get_info_by_id(project_id).name
@@ -69,8 +69,8 @@ class ExportImages(sly.app.Export):
     def download_images(self):
         progress = sly.Progress("Downloading images", self.images_number, need_info_log=True)
 
-        for dataset_data in self.image_data:
-            dataset_path = os.path.join(TMP_DIR, self.project_name, dataset_data.name)
+        for path, dataset_data in self.image_data.items():
+            dataset_path = os.path.join(TMP_DIR, self.project_name, path)
             os.makedirs(dataset_path, exist_ok=True)
             image_ids = [image_info.id for image_info in dataset_data.image_infos]
             paths = [
@@ -89,9 +89,8 @@ class ExportImages(sly.app.Export):
 
     def read_dataset(self, dataset_info):
         image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
-
-        self.image_data.append(DatasetData(dataset_info.name, dataset_info.id, image_infos))
         self.images_number += len(image_infos)
+        return DatasetData(dataset_info.name, dataset_info.id, image_infos)
 
 
 @sly.handle_exceptions(has_ui=False)
