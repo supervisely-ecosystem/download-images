@@ -37,10 +37,14 @@ class ExportImages(sly.app.Export):
         if self.selected_dataset:
             sly.logger.info(f"App launched from dataset: {self.selected_dataset}")
 
-            dataset_info = api.dataset.get_info_by_id(self.selected_dataset)
-            project_id = dataset_info.project_id
+            dataset_infos = api.dataset.get_nested(self.selected_project, self.selected_dataset)
 
-            self.read_dataset(dataset_info)
+            project_info = api.project.get_info_by_id(self.selected_project)
+            project_id = project_info.id
+
+            dataset_data = self.read_dataset(dataset_infos)
+            if dataset_data:
+                self.image_data[dataset_data.name] = dataset_data
             w.workflow_input(api, self.selected_dataset, type="dataset")
         else:
             sly.logger.info(f"App launched from project: {self.selected_project}")
@@ -67,6 +71,9 @@ class ExportImages(sly.app.Export):
         sly.fs.archive_directory(input_path, self.archive_path)
 
     def download_images(self):
+        if not self.image_data:
+            sly.logger.warning("No image data found for download")
+
         progress = sly.Progress("Downloading images", self.images_number, need_info_log=True)
 
         for path, dataset_data in self.image_data.items():
@@ -87,9 +94,10 @@ class ExportImages(sly.app.Export):
             else:
                 loop.run_until_complete(coro)
 
-    def read_dataset(self, dataset_info):
-        image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
-        self.images_number += len(image_infos)
+    def read_dataset(self, dataset_infos):
+        for dataset_info in dataset_infos:
+            image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
+            self.images_number += len(image_infos)
         return DatasetData(dataset_info.name, dataset_info.id, image_infos)
 
 
