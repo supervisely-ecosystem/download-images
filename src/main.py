@@ -28,6 +28,13 @@ if api.server_address == "https://app.supervisely.com":
 
 
 class ExportImages(sly.app.Export):
+    def _process_datasets(self, project_id: int, dataset_id=None):
+        for path, dataset in api.dataset.tree(project_id, dataset_id=dataset_id):
+            dataset_info = api.dataset.get_info_by_id(dataset.id)
+            path = "/".join(path)
+            path = os.path.join(path, dataset_info.name)
+            self.image_data[path] = self.read_dataset(dataset_info)
+
     def process(self, context: sly.app.Export.Context):
         self.selected_project = sly.io.env.project_id(raise_not_found=False)
         self.selected_dataset = sly.io.env.dataset_id(raise_not_found=False)
@@ -40,16 +47,13 @@ class ExportImages(sly.app.Export):
             dataset_info = api.dataset.get_info_by_id(self.selected_dataset)
             project_id = dataset_info.project_id
 
-            self.read_dataset(dataset_info)
+            self._process_datasets(project_id, dataset_id=self.selected_dataset)
             w.workflow_input(api, self.selected_dataset, type="dataset")
         else:
             sly.logger.info(f"App launched from project: {self.selected_project}")
             project_id = self.selected_project
 
-            for path, dataset in api.dataset.tree(project_id):
-                dataset_info = api.dataset.get_info_by_id(dataset.id)
-                path = "/".join(path)
-                self.image_data[path] = self.read_dataset(dataset_info)
+            self._process_datasets(project_id)
 
             w.workflow_input(api, self.selected_project, type="project")
         self.project_name = api.project.get_info_by_id(project_id).name
@@ -70,7 +74,11 @@ class ExportImages(sly.app.Export):
         progress = sly.Progress("Downloading images", self.images_number, need_info_log=True)
 
         for path, dataset_data in self.image_data.items():
-            dataset_path = os.path.join(TMP_DIR, self.project_name, path)
+            if path == "":
+                dataset_path = os.path.join(TMP_DIR, self.project_name, dataset_data.name)
+            else:
+                dataset_path = os.path.join(TMP_DIR, self.project_name, path)
+
             os.makedirs(dataset_path, exist_ok=True)
             image_ids = [image_info.id for image_info in dataset_data.image_infos]
             paths = [
