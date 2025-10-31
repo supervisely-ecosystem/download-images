@@ -3,7 +3,7 @@
   "type": "app",
   "categories": ["export", "images"],
   "description": "Download images from project or dataset.",
-  "docker_image": "supervisely/import-export:6.73.454",
+  "docker_image": "supervisely/import-export:6.73.466",
   "min_instance_version": "6.15.2",
   "main_script": "src/main.py",
   "task_location": "workspace_tasks",
