@@ -6,6 +6,11 @@
   "docker_image": "supervisely/import-export:6.73.466",
   "min_instance_version": "6.15.2",
   "main_script": "src/main.py",
+  "modal_template": "src/modal.html",
+  "modal_template_state": {
+    "preserveStructure": true,
+    "datasetName": ""
+  },
   "task_location": "workspace_tasks",
   "icon": "https://github.com/supervisely-ecosystem/download-images/assets/119248312/7fc6f17a-4afb-4521-9c13-59e95aab402c",
   "icon_cover": true,
