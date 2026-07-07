@@ -4,7 +4,7 @@
   "categories": ["export", "images"],
   "description": "Download images from project or dataset.",
   "docker_image": "supervisely/import-export:6.74.10",
-  "min_instance_version": "6.17.9",
+  "min_instance_version": "6.17.8",
   "main_script": "src/main.py",
   "modal_template": "src/modal.html",
   "modal_template_state": {
