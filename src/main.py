@@ -29,6 +29,7 @@ if api.server_address == "https://app.supervisely.com":
     if semaphore._value == 10:
         api.set_semaphore_size(7)
 
+DOWNLOAD_BATCH_SIZE = 5000
 APP_NAME = "Download images"
 COLLECTION_ID = os.environ.get("modal.state.collectionId")
 PRESERVE_STRUCTURE = (os.environ.get("modal.state.preserveStructure", "true")).lower() == "true"
@@ -188,20 +189,21 @@ class ExportImages(sly.app.Export):
                 dataset_path = os.path.join(TMP_DIR, self.project_name, path)
 
             os.makedirs(dataset_path, exist_ok=True)
-            image_ids = [image_info.id for image_info in dataset_data.image_infos]
-            paths = [
-                os.path.join(dataset_path, image_info.name)
-                for image_info in dataset_data.image_infos
-            ]
-            coro = api.image.download_paths_async(
-                image_ids, paths, progress_cb=progress.iters_done_report
-            )
             loop = sly.utils.get_or_create_event_loop()
-            if loop.is_running():
-                future = asyncio.run_coroutine_threadsafe(coro, loop)
-                future.result()
-            else:
-                loop.run_until_complete(coro)
+            for image_infos_batch in sly.batched(dataset_data.image_infos, DOWNLOAD_BATCH_SIZE):
+                image_ids = [image_info.id for image_info in image_infos_batch]
+                paths = [
+                    os.path.join(dataset_path, image_info.name)
+                    for image_info in image_infos_batch
+                ]
+                coro = api.image.download_paths_async(
+                    image_ids, paths, progress_cb=progress.iters_done_report
+                )
+                if loop.is_running():
+                    future = asyncio.run_coroutine_threadsafe(coro, loop)
+                    future.result()
+                else:
+                    loop.run_until_complete(coro)
 
     def read_dataset(self, dataset_info):
         image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
