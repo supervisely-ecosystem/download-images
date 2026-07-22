@@ -32,8 +32,14 @@ if api.server_address == "https://app.supervisely.com":
 
 DOWNLOAD_BATCH_SIZE = 5000
 APP_NAME = "Download images"
+# Downstream delivery truncates file names to 60 chars; cap here to keep ext.
+MAX_NAME_LENGTH = 60
+# Headroom for the "_NN" dedup suffix.
+NAME_SUFFIX_RESERVE = 4
 COLLECTION_ID = os.environ.get("modal.state.collectionId")
-PRESERVE_STRUCTURE = (os.environ.get("modal.state.preserveStructure", "true")).lower() == "true"
+PRESERVE_STRUCTURE = (
+    os.environ.get("modal.state.preserveStructure", "true")
+).lower() == "true"
 FLAT_DATASET_NAME = os.environ.get("modal.state.datasetName")
 
 
@@ -69,7 +75,9 @@ def rename_filtered_collection(collection_info) -> None:
             f"Collection {collection_info.id} renamed: '{collection_info.name}' -> '{new_name}'"
         )
     except Exception as e:
-        sly.logger.warning(f"Failed to rename collection {collection_info.id}: {repr(e)}")
+        sly.logger.warning(
+            f"Failed to rename collection {collection_info.id}: {repr(e)}"
+        )
 
 
 def get_collection_image_infos(collection_id: int):
@@ -90,11 +98,36 @@ def get_collection_image_infos(collection_id: int):
     return collection_info, image_infos
 
 
+def split_ext(name):
+    """Split a file name into (stem, ext) keeping the extension (incl. dot)."""
+    ext = sly.fs.get_file_ext(name)
+    stem = name[: len(name) - len(ext)] if ext else name
+    return stem, ext
+
+
+def cap_length(name, max_len):
+    """Trim the stem so that stem+ext fits into max_len, never dropping the ext."""
+    if len(name) <= max_len:
+        return name
+    stem, ext = split_ext(name)
+    budget = max_len - len(ext)
+    return f"{stem[:budget]}{ext}" if budget > 0 else stem[:1] + ext
+
+
+def fit_name(name, used_names, max_len=MAX_NAME_LENGTH):
+    """Return a unique name that fits max_len with its extension preserved."""
+    if len(name) > max_len:
+        name = cap_length(name, max_len - NAME_SUFFIX_RESERVE)
+    return generate_free_name(used_names, name, with_ext=True, extend_used_names=True)
+
+
 def disambiguate_names(image_infos):
     """Rename images whose names repeat across datasets in the flat list.
 
     Every image involved in a name conflict gets its source dataset ID appended
-    to the name, so the origin of each file stays visible.
+    to the name, so the origin of each file stays visible. Names are capped to
+    MAX_NAME_LENGTH (extension preserved) so the dataset ID and extension survive
+    downstream truncation instead of being cut off.
     """
     progress = sly.Progress(
         "Checking for duplicate names", len(image_infos), need_info_log=True
@@ -102,26 +135,29 @@ def disambiguate_names(image_infos):
     name_counts = defaultdict(int)
     for image_info in image_infos:
         name_counts[image_info.name] += 1
-    used_names = {image_info.name for image_info in image_infos}
+    used_names = set()
     result = []
     for image_info in image_infos:
-        if name_counts[image_info.name] < 2:
-            result.append(image_info)
-            progress.iter_done_report()
-            continue
-        if "." in image_info.name:
-            stem, ext = image_info.name.rsplit(".", 1)
-            new_name = f"{stem}_{image_info.dataset_id}.{ext}"
+        original = image_info.name
+        if name_counts[original] < 2:
+            new_name = fit_name(original, used_names)
         else:
-            new_name = f"{image_info.name}_{image_info.dataset_id}"
-        new_name = generate_free_name(
-            used_names, new_name, with_ext=True, extend_used_names=True
-        )
-        sly.logger.info(
-            f"Duplicate image name in collection: '{image_info.name}' "
-            f"(dataset {image_info.dataset_id}) renamed to '{new_name}'"
-        )
-        result.append(image_info._replace(name=new_name))
+            stem, ext = split_ext(original)
+            suffix = f"_{image_info.dataset_id}"
+            budget = MAX_NAME_LENGTH - NAME_SUFFIX_RESERVE - len(suffix) - len(ext)
+            trimmed_stem = stem[:budget] if budget > 0 else stem[:1]
+            candidate = f"{trimmed_stem}{suffix}{ext}"
+            new_name = generate_free_name(
+                used_names, candidate, with_ext=True, extend_used_names=True
+            )
+        if new_name != original:
+            sly.logger.info(
+                f"Image name '{original}' (dataset {image_info.dataset_id}) "
+                f"exported as '{new_name}'"
+            )
+            result.append(image_info._replace(name=new_name))
+        else:
+            result.append(image_info)
         progress.iter_done_report()
     return result
 
@@ -216,10 +252,34 @@ class ExportImages(sly.app.Export):
         self.project_name = api.project.get_info_by_id(project_id).name
         self.archive_name = self.project_name + ".tar"
 
+        self._enforce_name_limits()
         self.download_images()
         self.archive_images()
 
         return self.archive_path
+
+    def _enforce_name_limits(self):
+        """Cap archive file names per folder so downstream truncation to
+        MAX_NAME_LENGTH chars can't strip extensions or collapse distinct images
+        into colliding files. Applies to every launch source; flat-collection
+        names are already capped by disambiguate_names, so this is a no-op there.
+        """
+        for path, dataset_data in self.image_data.items():
+            used_names = set()
+            new_infos = []
+            changed = False
+            for image_info in dataset_data.image_infos:
+                new_name = fit_name(image_info.name, used_names)
+                if new_name != image_info.name:
+                    changed = True
+                    sly.logger.info(
+                        f"Image name '{image_info.name}' exported as '{new_name}'"
+                    )
+                    new_infos.append(image_info._replace(name=new_name))
+                else:
+                    new_infos.append(image_info)
+            if changed:
+                self.image_data[path] = dataset_data._replace(image_infos=new_infos)
 
     def archive_images(self):
         input_path = os.path.join(TMP_DIR)
@@ -228,17 +288,23 @@ class ExportImages(sly.app.Export):
         sly.fs.archive_directory(input_path, self.archive_path)
 
     def download_images(self):
-        progress = sly.Progress("Downloading images", self.images_number, need_info_log=True)
+        progress = sly.Progress(
+            "Downloading images", self.images_number, need_info_log=True
+        )
 
         for path, dataset_data in self.image_data.items():
             if path == "":
-                dataset_path = os.path.join(TMP_DIR, self.project_name, dataset_data.name)
+                dataset_path = os.path.join(
+                    TMP_DIR, self.project_name, dataset_data.name
+                )
             else:
                 dataset_path = os.path.join(TMP_DIR, self.project_name, path)
 
             os.makedirs(dataset_path, exist_ok=True)
             loop = sly.utils.get_or_create_event_loop()
-            for image_infos_batch in sly.batched(dataset_data.image_infos, DOWNLOAD_BATCH_SIZE):
+            for image_infos_batch in sly.batched(
+                dataset_data.image_infos, DOWNLOAD_BATCH_SIZE
+            ):
                 image_ids = [image_info.id for image_info in image_infos_batch]
                 paths = [
                     os.path.join(dataset_path, image_info.name)
@@ -254,7 +320,9 @@ class ExportImages(sly.app.Export):
                     loop.run_until_complete(coro)
 
     def read_dataset(self, dataset_info):
-        image_infos = api.image.get_list(dataset_info.id, force_metadata_for_links=False)
+        image_infos = api.image.get_list(
+            dataset_info.id, force_metadata_for_links=False
+        )
         self.images_number += len(image_infos)
         return DatasetData(dataset_info.name, dataset_info.id, image_infos)
 
