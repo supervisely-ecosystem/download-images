@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 from collections import defaultdict, namedtuple
@@ -34,6 +35,20 @@ APP_NAME = "Download images"
 COLLECTION_ID = os.environ.get("modal.state.collectionId")
 PRESERVE_STRUCTURE = (os.environ.get("modal.state.preserveStructure", "true")).lower() == "true"
 FLAT_DATASET_NAME = os.environ.get("modal.state.datasetName")
+
+
+def parse_entity_ids(raw):
+    """Parse the selected image IDs passed as a JSON list in modal.state.entityIds."""
+    if not raw:
+        return None
+    try:
+        ids = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return [int(i) for i in ids] if ids else None
+
+
+ENTITY_IDS = parse_entity_ids(os.environ.get("modal.state.entityIds"))
 # auto-created filter collections are named like "Filtered entities 2026-07-03T14-31-57-501Z"
 FILTERED_COLLECTION_PATTERN = re.compile(
     r"^Filtered entities \d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z"
@@ -119,14 +134,19 @@ class ExportImages(sly.app.Export):
             path = os.path.join(path, dataset_info.name)
             self.image_data[path] = self.read_dataset(dataset_info)
 
-    def _process_collection(self, collection_id: int) -> int:
-        collection_info, image_infos = get_collection_image_infos(collection_id)
-        rename_filtered_collection(collection_info)
+    def _structure_image_infos(self, image_infos, project_id, flat_folder_name):
+        """Populate self.image_data from a flat list of image infos.
+
+        Shared by collection and selected-images (entityIds) launches. With
+        PRESERVE_STRUCTURE the images are regrouped by dataset_id into their
+        original tree; otherwise they are flattened into a single folder (with
+        cross-dataset name collisions disambiguated).
+        """
         if PRESERVE_STRUCTURE:
             by_dataset = defaultdict(list)
             for image_info in image_infos:
                 by_dataset[image_info.dataset_id].append(image_info)
-            for path, dataset in api.dataset.tree(collection_info.project_id):
+            for path, dataset in api.dataset.tree(project_id):
                 if dataset.id not in by_dataset:
                     continue
                 path = "/".join(path)
@@ -137,16 +157,31 @@ class ExportImages(sly.app.Export):
                 )
                 self.images_number += len(dataset_image_infos)
         else:
-            folder_name = FLAT_DATASET_NAME or f"Collection {collection_info.id}"
+            folder_name = FLAT_DATASET_NAME or flat_folder_name
             image_infos = disambiguate_names(image_infos)
-            self.image_data[""] = DatasetData(folder_name, collection_info.id, image_infos)
+            self.image_data[""] = DatasetData(folder_name, project_id, image_infos)
             self.images_number += len(image_infos)
+
+    def _process_collection(self, collection_id: int) -> int:
+        collection_info, image_infos = get_collection_image_infos(collection_id)
+        rename_filtered_collection(collection_info)
+        self._structure_image_infos(
+            image_infos, collection_info.project_id, f"Collection {collection_info.id}"
+        )
         return collection_info.project_id
+
+    def _process_entities(self, entity_ids, project_id: int) -> None:
+        image_infos = api.image.get_info_by_id_batch(
+            entity_ids, force_metadata_for_links=False
+        )
+        project_name = api.project.get_info_by_id(project_id).name
+        self._structure_image_infos(image_infos, project_id, project_name)
 
     def process(self, context: sly.app.Export.Context):
         self.selected_project = sly.io.env.project_id(raise_not_found=False)
         self.selected_dataset = sly.io.env.dataset_id(raise_not_found=False)
         self.selected_collection = COLLECTION_ID
+        self.selected_entities = ENTITY_IDS
         self.image_data = {}
         self.images_number = 0
 
@@ -154,6 +189,14 @@ class ExportImages(sly.app.Export):
             sly.logger.info(f"App launched for collection: {self.selected_collection}")
 
             project_id = self._process_collection(int(self.selected_collection))
+            w.workflow_input(api, project_id, type="project")
+        elif self.selected_entities:
+            sly.logger.info(
+                f"App launched for {len(self.selected_entities)} selected images"
+            )
+
+            project_id = self.selected_project
+            self._process_entities(self.selected_entities, project_id)
             w.workflow_input(api, project_id, type="project")
         elif self.selected_dataset:
             sly.logger.info(f"App launched from dataset: {self.selected_dataset}")
