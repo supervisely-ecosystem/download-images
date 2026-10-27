@@ -3,3 +3,6 @@
 .DS_Store
 __pycache__/
 supervisely
+.venv314/
+.ruff_cache/
+.pytest_cache/
